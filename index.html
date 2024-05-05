@@ -19,7 +19,7 @@
         }
 
         #dashboard {
-        flex-grow: 1;
+            flex-grow: 1;
             display: flex;
             flex-direction: column;
             background: #f7f7f7;
@@ -130,9 +130,14 @@
         function renderEvent(event) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+
             let players = [];
             event.forEach(item => {
-                if (item.type === 'Player') {
+                if (item.type === 'Server') {
+                    mapData = item.serverEventInfo.mapData;
+                    mapImage.src = item.serverEventInfo.mapUrl;
+                    ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+                } else if (item.type === 'Player') {
                     drawPlayer(item.playerEventInfo);
                     players.push(item.playerEventInfo);
                 } else if (item.type === 'Grenade') {
@@ -146,11 +151,19 @@
                     // TODO: Draw Round Timer
                     // TODO: Draw Warmup Timer
                     // TODO: Draw Start Timer
-                } else if (item.type === 'Server') {
-                    mapData = item.serverEventInfo.mapData;
                 }
             });
             updateScoreboard(players);
+        }
+
+        function getWeaponImage(weapon) {
+            let path = "/assets";
+            switch (weapon) {
+                case "AK-47":
+                    return `${path}/ak47.svg`;
+                case "AWP":
+
+            }
         }
 
         function drawPlayer(item) {
@@ -167,7 +180,13 @@
 
             // Player name
             ctx.font = '12px Arial';
-            ctx.fillText(item.name, x - (ctx.measureText(item.name).width / 2), y - 10);
+            ctx.fillText(item.name, x - (ctx.measureText(item.name).width / 2), y + 10);
+
+            // Player Weapon
+            var weapon = new Image();
+            let weaponPath = getWeaponImage(item.weapon);
+            weapon.src = weaponPath;
+            ctx.drawImage(weapon, x - (ctx.measureText(item.name).width / 2), y - 10, 30, 20);
 
             // Highlight if blinded.
             if (item.isBlinded) {
@@ -192,8 +211,8 @@
         function drawSmokeGrenade(x, y, radius) {
             // Create a radial gradient (inner to outer)
             let grd = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius);
-            grd.addColorStop(0, 'rgba(128, 128, 128, 0.99)'); 
-            grd.addColorStop(1, 'rgba(128, 128, 128, 0.2)'); 
+            grd.addColorStop(0, 'rgba(128, 128, 128, 0.99)');
+            grd.addColorStop(1, 'rgba(128, 128, 128, 0.2)');
 
             // Draw the smoke
             ctx.fillStyle = grd;

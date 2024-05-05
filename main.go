@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -62,11 +63,13 @@ type EventInfo struct {
 	PlayerInfo  PlayerEventInfo  `json:"playerEventInfo"`
 	RoundInfo   RoundEventInfo   `json:"roundEventInfo"`
 	GrenadeInfo GrenadeEventInfo `json:"grenadeEventInfo"`
-	ServerInfo  ServerInfo       `json:"serverInfo"`
+	ServerInfo  ServerEventInfo  `json:"serverEventInfo"`
 }
 
-type ServerInfo struct {
+type ServerEventInfo struct {
 	MapData ex.Map `json:"mapData"`
+	MapName string `json:"mapName"`
+	MapUrl  string `json:"mapUrl"`
 }
 
 var (
@@ -107,27 +110,28 @@ func broadcast(event []EventInfo) {
 	}
 }
 
-// func serveMapImage(w http.ResponseWriter, r *http.Request) {
-// http.ServeFile(w, r, mapData.ImagePath)
-// }
-
 func main() {
+	// if len(os.Args) < 2 {
+	// 	log.Panic("Please provide a demo file as an argument.")
+	// }
+	// demoName := os.Args[1]
+
 	http.HandleFunc("/ws", wsHandler)
-	// http.HandleFunc("/map_image", serveMapImage) // Route to access the map image
 	go http.ListenAndServe(":8080", nil)
 
-	<-startProcessing // Wait for a client to connect before proceeding
+	// Wait for a client to connect before proceeding
+	<-startProcessing
 
-	demoFile, err := os.Open("ancient4k.dem")
+	demoFile, err := os.Open("miragetest.dem")
 	if err != nil {
-		log.Panic("failed to open demo file: ", err)
+		log.Panic("Failed to open demo file: ", err)
 	}
 	defer demoFile.Close()
 
 	p := dem.NewParser(demoFile)
 	defer p.Close()
 
-	var mapCodes = map[string]uint32{
+	var mapCrcs = map[string]uint32{
 		"de_mirage":   1936772555,
 		"de_anubis":   3934213780,
 		"de_nuke":     4081488007,
@@ -137,27 +141,18 @@ func main() {
 		"de_vertigo":  970160341,
 	}
 
+	var tickEvents = []EventInfo{}
 	p.RegisterNetMessageHandler(func(msg *msgs2.CSVCMsg_ServerInfo) {
 		mapName := msg.GetMapName()
-		crc := mapCodes[mapName]
+		crc := mapCrcs[mapName]
 		mapData = ex.GetMapMetadata(mapName, crc)
-		// radar := ex.GetMapRadar(mapName, crc)
-		// // Save the radar image for use in the frontend
-		// filePath := fmt.Sprintf("%s_radar.jpg", mapName)
-		// file, err := os.Create(filePath)
-		// if err != nil {
-		// 	log.Fatal("Could not create map image file: ", err)
-		// }
-		// defer file.Close()
-		// jpeg.Encode(file, radar, &jpeg.Options{Quality: 95})
 
-		// mapData.ImagePath = filePath
-		broadcast([]EventInfo{
-			{
-				Type: "Server",
-				ServerInfo: ServerInfo{
-					MapData: mapData,
-				},
+		tickEvents = append(tickEvents, EventInfo{
+			Type: "Server",
+			ServerInfo: ServerEventInfo{
+				MapData: mapData,
+				MapName: mapName,
+				MapUrl:  fmt.Sprintf(`https://radar-overviews.csgo.saiko.tech/%s/%d/radar.png`, mapName, crc),
 			},
 		})
 	})
@@ -167,7 +162,6 @@ func main() {
 			return
 		}
 
-		var tickEvents = []EventInfo{}
 		var participants = p.GameState().Participants().Playing()
 		for _, player := range participants {
 			var position = player.Position()
@@ -175,6 +169,10 @@ func main() {
 
 			// Get Player Equipment
 			var weaponType string
+			if player.ActiveWeapon() != nil {
+				weaponType = player.ActiveWeapon().Type.String()
+			}
+
 			equipment := []string{}
 			for _, item := range player.Inventory {
 				equipmentName := item.Type.String()
@@ -247,9 +245,8 @@ func main() {
 			},
 		}
 		tickEvents = append(tickEvents, event)
-
-		// fmt.Println(tickEvents)
 		broadcast(tickEvents)
+		tickEvents = []EventInfo{}
 	})
 
 	p.ParseToEnd()
