@@ -122,7 +122,7 @@ func main() {
 	// Wait for a client to connect before proceeding
 	<-startProcessing
 
-	demoFile, err := os.Open("miragetest.dem")
+	demoFile, err := os.Open("demo1.dem")
 	if err != nil {
 		log.Panic("Failed to open demo file: ", err)
 	}

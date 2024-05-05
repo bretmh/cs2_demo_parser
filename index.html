@@ -157,13 +157,57 @@
         }
 
         function getWeaponImage(weapon) {
-            let path = "/assets";
-            switch (weapon) {
-                case "AK-47":
-                    return `${path}/ak47.svg`;
-                case "AWP":
-
-            }
+            let path = "assets";
+            const equipmentMap = {
+                "AK-47": "ak47.svg",
+                "AWP": "awp.svg",
+                "AUG": "aug.svg",
+                "PP-Bizon": "bizon.svg",
+                "C4": "c4.svg",
+                "Desert Eagle": "deagle.svg",
+                "Decoy Grenade": "decoy.svg",
+                "Dual Berettas": "dualberettas.svg",
+                "FAMAS": "famas.svg",
+                "Five-SeveN": "fiveseven.svg",
+                "Flashbang": "flashbang.svg",
+                "G3SG1": "g3sg1.svg",
+                "Galil AR": "galilar.svg",
+                "Glock-18": "glock.svg",
+                "HE Grenade": "hegrenade.svg",
+                "P2000": "p2000.svg",
+                "Incendiary Grenade": "incgrenade0.svg",
+                "M249": "m249.svg",
+                "M4A4": "m4a1.svg",
+                "MAC-10": "mac10.svg",
+                "MAG-7": "mag7.svg",
+                "Molotov": "molotov.svg",
+                "MP7": "mp7.svg",
+                "MP5-SD": "mp5sd.svg",
+                "MP9": "mp9.svg",
+                "Negev": "negev.svg",
+                "Nova": "nova.svg",
+                "P250": "p250.svg",
+                "P90": "p90.svg",
+                "Sawed-Off": "sawedoff.svg",
+                "SCAR-20": "scar20.svg",
+                "SG 553": "sg556.svg",
+                "Smoke Grenade": "smokegrenade.svg",
+                "SSG 08": "ssg08.svg",
+                "Zeus x27": "taser.svg",
+                "Tec-9": "tec9.svg",
+                "UMP-45": "ump451.svg",
+                "XM1014": "xm1014.svg",
+                "M4A1": "m4a1_silencer.svg",
+                "CZ75 Auto": "cz75a.svg",
+                "USP-S": "usp_silencer.svg",
+                "R8 Revolver": "revolver.svg",
+                "Kevlar Vest": "kevlar_vest.svg",
+                "Kevlar + Helmet": "kevlar_helmet.svg",
+                "Defuse Kit": "icon_defuse_default.svg",
+                "Knife": "knife.svg",
+                "UNKNOWN": "unknown.svg"
+            };
+            return `${path}/weapons/${equipmentMap[weapon]}`;
         }
 
         function drawPlayer(item) {
