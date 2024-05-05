@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CS2 Demo Parser</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+        }
+
+        canvas {
+            border: 1px solid black;
+        }
+
+        #dashboard {
+        flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f7f7f7;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .team-container {
+            margin-bottom: 20px;
+        }
+
+        .team-header-t .team-header-ct {
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+
+        .player {
+            margin: 5px;
+            padding: 5px;
+            background-color: #ddd;
+            border-left: 5px solid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .player .health-bar {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            height: 5px;
+            background-color: green;
+        }
+
+        .terrorist {
+            border-color: red;
+        }
+
+        .counter-terrorist {
+            border-color: blue;
+        }
+
+        #controls {
+            margin-top: 10px;
+        }
+
+        #eventSlider {
+            width: 800px;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <div id="roundInfo">Round: 0</div>
+        <canvas id="gameCanvas" width="1024" height="1024"></canvas>
+        <div id="controls">
+            <button id="playPauseBtn">Play</button>
+            <button id="forwardBtn">Forward</button>
+            <button id="backwardBtn">Backward</button>
+            <input type="range" id="speedSlider" min="1" max="240" value="60" />
+            <span id="speedDisplay">60 TPS</span>
+            <input type="range" id="eventSlider" min="0" max="0" step="1" oninput="updateEvent(this.value)">
+        </div>
+    </div>
+    <div id="dashboard">
+        <div id="terroristContainer" class="team-container">
+            <div class="team-header-t" id="team-header-t">Terrorists | Score: 0</div>
+        </div>
+        <div id="counterTerroristContainer" class="team-container">
+            <div class="team-header-ct" id="team-header-ct">Counter-Terrorists | Score: 0</div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const events = [];
+        const slider = document.getElementById('eventSlider');
+        const roundInfo = document.getElementById('roundInfo');
+        const tHeader = document.getElementById('team-header-t');
+        const ctHeader = document.getElementById('team-header-ct');
+        const terroristContainer = document.getElementById('terroristContainer');
+        const counterTerroristContainer = document.getElementById('counterTerroristContainer');
+        const playerElements = {};
+
+        // Need to pass this data along to the client.
+        const mapImage = new Image();
+        mapImage.src = 'https://radar-overviews.csgo.saiko.tech/de_ancient/4262714479/radar.png';
+        mapImage.onload = () => {
+            ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+        };
+
+        let mapData = { pos_x: -2953, pos_y: 2164, scale: 5 };
+
+        const conn = new WebSocket('ws://localhost:8080/ws');
+        conn.onmessage = function (e) {
+            const data = JSON.parse(e.data);
+            events.push(data);
+            slider.max = events.length - 1;
+        };
+
+        function updateEvent(index) {
+            slider.value = index;
+            renderEvent(events[index]);
+        }
+
+        function renderEvent(event) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+            let players = [];
+            event.forEach(item => {
+                if (item.type === 'Player') {
+                    drawPlayer(item.playerEventInfo);
+                    players.push(item.playerEventInfo);
+                } else if (item.type === 'Grenade') {
+                    drawGrenade(item.grenadeEventInfo);
+                } else if (item.type === 'Round') {
+                    roundInfo.textContent = "Round: " + item.roundEventInfo.roundsPlayed;
+                    tHeader.textContent = `Terrorists | Score: ${item.roundEventInfo.teamScoreT}`;
+                    ctHeader.textContent = `Counter-Terrorists | Score: ${item.roundEventInfo.teamScoreCT}`;
+
+                    // TODO: Draw Bomb
+                    // TODO: Draw Round Timer
+                    // TODO: Draw Warmup Timer
+                    // TODO: Draw Start Timer
+                } else if (item.type === 'Server') {
+                    mapData = item.serverEventInfo.mapData;
+                }
+            });
+            updateScoreboard(players);
+        }
+
+        function drawPlayer(item) {
+            if (item.health <= 0) return;
+
+            const x = item.position.x;
+            const y = item.position.y;
+
+            // Player circle
+            ctx.fillStyle = item.team === "T" ? 'red' : 'blue';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Player name
+            ctx.font = '12px Arial';
+            ctx.fillText(item.name, x - (ctx.measureText(item.name).width / 2), y - 10);
+
+            // Highlight if blinded.
+            if (item.isBlinded) {
+                ctx.strokeStyle = 'yellow';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw direction line
+            const lineLength = 20;
+            // This needed to be inverted? Math.
+            const directionRadians = item.direction.x * Math.PI / 180 * -1;
+            const endX = x + lineLength * Math.cos(directionRadians);
+            const endY = y + lineLength * Math.sin(directionRadians);
+            ctx.strokeStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+        }
+
+        function drawSmokeGrenade(x, y, radius) {
+            // Create a radial gradient (inner to outer)
+            let grd = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius);
+            grd.addColorStop(0, 'rgba(128, 128, 128, 0.99)'); 
+            grd.addColorStop(1, 'rgba(128, 128, 128, 0.2)'); 
+
+            // Draw the smoke
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+
+        function drawGrenade(item) {
+            const x = item.position.x;
+            const y = item.position.y;
+
+            const grenadeColors = {
+                'Molotov': 'rgba(255, 0, 0, 0.5)',
+                'Incendiary Grenade': 'rgba(255, 0, 0, 0.5)',
+                'Flashbang': 'rgba(255, 255, 0, 0.5)',
+                'HE Grenade': 'rgba(0, 0, 0, 1.0)',
+                'Decoy Grenade': 'rgba(0, 255, 0, 1.0)'
+            };
+
+            // Do some fancy drawings based on grenade type.
+            if (item.name === "Smoke Grenade") {
+                drawSmokeGrenade(x, y, 25);
+                return;
+            }
+
+            ctx.fillStyle = grenadeColors[item.name] || 'rgba(128, 128, 128, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function updateScoreboard(players) {
+            players.forEach(player => {
+
+                // Get player equipment string.
+                // TODO - Get icons for equipment.
+                // TODO - Don't write if equipment is the same.
+                // Players should probably have an equipment object/set.
+                let equipment = "";
+                for (let i = 0; i < player.equipment.length; i++) {
+                    equipment += player.equipment[i];
+                    if (i < player.equipment.length - 1) {
+                        equipment += ", ";
+                    }
+                }
+
+                if (!playerElements[player.playerID]) {
+                    const playerDiv = document.createElement('div');
+                    playerDiv.className = `player ${player.team}`;
+                    playerDiv.innerHTML = `
+                    <strong>${player.name}</strong> (${player.kills}/${player.deaths}/${player.assists})<br>
+                    Health: ${player.health} | $${player.money} | ${player.weapon}<br>
+                    Equipment: ${equipment}
+                    <div class="health-bar" style="width: ${player.health}%;"></div>
+                    `;
+                    playerElements[player.playerID] = playerDiv;
+                    if (player.team === "T") {
+                        terroristContainer.appendChild(playerDiv);
+                    } else {
+                        counterTerroristContainer.appendChild(playerDiv);
+                    }
+                } else {
+                    const playerDiv = playerElements[player.playerID];
+                    playerDiv.querySelector('.health-bar').style.width = `${player.health}%`;
+                    playerDiv.innerHTML = `
+                    <strong>${player.name}</strong> (${player.kills}/${player.deaths}/${player.assists})<br>
+                    Health: ${player.health} | $${player.money} | ${player.weapon}<br>
+                    Equipment: ${equipment}
+                    <div class="health-bar" style="width: ${player.health}%;"></div>
+                `;
+                }
+            });
+        }
+
+        function playEvents() {
+            if (parseInt(slider.value) < slider.max) {
+                slider.value = parseInt(slider.value) + 1;
+                updateEvent(slider.value);
+            } else {
+                clearInterval(playbackInterval);
+                document.getElementById('playPauseBtn').textContent = "Play";
+            }
+        }
+
+        document.getElementById('playPauseBtn').onclick = function () {
+            if (this.textContent === "Play") {
+                playbackInterval = setInterval(playEvents, 1000 / parseInt(document.getElementById('speedSlider').value));
+                this.textContent = "Pause";
+            } else {
+                clearInterval(playbackInterval);
+                this.textContent = "Play";
+            }
+        };
+
+        document.getElementById('speedSlider').oninput = function () {
+            document.getElementById('speedDisplay').textContent = `${this.value} TPS`;
+            if (playbackInterval) {
+                clearInterval(playbackInterval);
+                playbackInterval = setInterval(playEvents, 1000 / this.value);
+            }
+        };
+
+        conn.onerror = function (err) {
+            console.error('WebSocket Error:', err);
+        };
+
+        conn.onclose = function () {
+            console.log('WebSocket Connection Closed.');
+        };
+    </script>
+</body>
+
+</html>
